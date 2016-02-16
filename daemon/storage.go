@@ -49,6 +49,7 @@ var StorageDrivers map[string]func(*dockertypes.Info) (Storage, error) = map[str
 	"aufs":         AufsFactory,
 	"overlay":      OverlayFsFactory,
 	"vbox":         VBoxStorageFactory,
+	"rbd":          RbdStorageFactory,
 }
 
 func StorageFactory(sysinfo *dockertypes.Info) (Storage, error) {
@@ -403,5 +404,66 @@ func (v *VBoxStorage) CreateVolume(daemon *Daemon, podId, shortName string) (*hy
 }
 
 func (v *VBoxStorage) RemoveVolume(podId string, record []byte) error {
+	return nil
+}
+
+
+type RbdStorage struct {
+	rootPath string
+}
+
+func RbdStorageFactory(_ *dockertypes.Info) (Storage, error) {
+	driver := &RbdStorage{
+		rootPath: path.Join(utils.HYPER_ROOT, "rbd"),
+	}
+	return driver, nil
+}
+
+func (v *RbdStorage) Type() string {
+	return "rbd"
+}
+
+func (v *RbdStorage) RootPath() string {
+	return v.rootPath
+}
+
+func (*RbdStorage) Init() error { return nil }
+
+func (*RbdStorage) CleanUp() error { return nil }
+
+func (v *RbdStorage) PrepareContainer(id, sharedDir string) (*hypervisor.ContainerInfo, error) {
+	//devFullName, err := vbox.MountContainerToSharedDir(id, v.RootPath(), "")
+	//if err != nil {
+	//	glog.Error("got error when mount container to share dir ", err.Error())
+	//	return nil, err
+	//}
+
+	devFullName := fmt.Sprintf("/dev/rbd/rbd/docker_image_%s", id)
+	return &hypervisor.ContainerInfo{
+		Id:     id,
+		Rootfs: "/rootfs",
+		Image:  devFullName,
+		Fstype: "ext4",
+	}, nil
+}
+
+func (v *RbdStorage) InjectFile(src io.Reader, containerId, target, rootDir string, perm, uid, gid int) error {
+	//return errors.New("rbd storage driver does not support file insert yet")
+	return nil
+}
+
+func (v *RbdStorage) CreateVolume(daemon *Daemon, podId, shortName string) (*hypervisor.VolumeInfo, error) {
+	volName, err := storage.CreateVFSVolume(podId, shortName)
+	if err != nil {
+		return nil, err
+	}
+	return &hypervisor.VolumeInfo{
+		Name:     shortName,
+		Filepath: volName,
+		Fstype:   "dir",
+	}, nil
+}
+
+func (v *RbdStorage) RemoveVolume(podId string, record []byte) error {
 	return nil
 }

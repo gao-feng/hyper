@@ -14,6 +14,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/hyperhq/hyper/daemon"
 	"github.com/hyperhq/hyper/daemon/graphdriver/vbox"
+	_ "github.com/hyperhq/hyper/daemon/graphdriver/rbd"
 	"github.com/hyperhq/hyper/server"
 	"github.com/hyperhq/hyper/utils"
 	"github.com/hyperhq/runv/driverloader"
