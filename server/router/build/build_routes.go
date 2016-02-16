@@ -24,8 +24,8 @@ import (
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/container"
 	"github.com/docker/go-units"
+	"github.com/getdvm/libdocker/daemon/daemonbuilder"
 	"github.com/golang/glog"
-	"github.com/hyperhq/hyper/daemon/daemonbuilder"
 	"golang.org/x/net/context"
 )
 
