@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/Unknwon/goconfig"
-	docker "github.com/docker/docker/daemon"
 	"github.com/docker/docker/daemon/logger/jsonfilelog"
 	"github.com/docker/docker/opts"
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/registry"
+	docker "github.com/getdvm/libdocker/daemon"
 	"github.com/golang/glog"
 	"github.com/hyperhq/hyper/utils"
 	"github.com/hyperhq/runv/hypervisor"
