@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// tag is nil means resize tty of container
 func (daemon *Daemon) TtyResize(podId, tag string, h, w int) error {
 	var (
 		container string
@@ -26,14 +27,35 @@ func (daemon *Daemon) TtyResize(podId, tag string, h, w int) error {
 			return fmt.Errorf("can not find pod %s", podId)
 		}
 
-		for _, c := range pod.ctnInfo {
-			if _, ok := c.ClientTag[tag]; ok {
-				container = c.Id
+		if tag != "" {
+			// want to resize tty of container?
+			for _, c := range pod.ctnInfo {
+				if _, ok := c.ClientTag[tag]; ok {
+					container = c.Id
+					break
+				}
+			}
+
+			pod.RLock()
+			// want to resize tty of exec?
+			if exec, ok := pod.execList[tag]; ok {
+				execId = exec.ExecId
+				container = exec.Container
+			}
+			pod.RUnlock()
+		} else {
+			ttyContainers := pod.ctnInfo
+			if pod.spec.Type == "service-discovery" {
+				ttyContainers = pod.ctnInfo[1:]
+			}
+
+			if len(ttyContainers) >= 1 {
+				container = ttyContainers[0].Id
 			}
 		}
 
 		if container == "" {
-			return fmt.Errorf("can not find container for pod %s", podId)
+			return fmt.Errorf("can not find container for pod %s, tag %s", podId, tag)
 		}
 	} else if strings.Contains(podId, "vm-") {
 		// Doesn't support resize vm process's tty
@@ -49,14 +71,14 @@ func (daemon *Daemon) TtyResize(podId, tag string, h, w int) error {
 		if err != nil {
 			return err
 		}
-	}
 
-	pod.RLock()
-	// want to resize tty of exec
-	if exec, ok := pod.execList[tag]; ok {
-		execId = exec.ExecId
+		pod.RLock()
+		// want to resize tty of exec
+		if exec, ok := pod.execList[tag]; ok {
+			execId = exec.ExecId
+		}
+		pod.RUnlock()
 	}
-	pod.RUnlock()
 
 	vm, ok := daemon.VmList[vmid]
 	if !ok {
