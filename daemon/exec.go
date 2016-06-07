@@ -6,7 +6,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/hyperhq/runv/hypervisor"
-	"github.com/hyperhq/runv/hypervisor/types"
+	"github.com/hyperhq/runv/hypervisor/pod"
 )
 
 // tag == nil means get container's exit code
@@ -29,16 +29,16 @@ func (daemon *Daemon) ExitCode(container, tag string) (int, error) {
 	}
 
 	pod.RLock()
-	tty, ok := pod.ttyList[tag]
+	exec, ok := pod.execList[tag]
 	defer pod.RUnlock()
 
 	if !ok {
 		return -1, fmt.Errorf("Tag %s incorrect", tag)
 	}
 
-	delete(pod.ttyList, tty.ClientTag)
+	delete(pod.execList, tag)
 
-	return int(tty.ExitCode), nil
+	return int(exec.ExitCode), nil
 }
 
 func (daemon *Daemon) Exec(stdin io.ReadCloser, stdout io.WriteCloser, key, id, cmd, tag string, terminal bool) error {
@@ -48,11 +48,15 @@ func (daemon *Daemon) Exec(stdin io.ReadCloser, stdout io.WriteCloser, key, id, 
 		err       error
 	)
 
-	tty := &hypervisor.TtyIO{
-		ClientTag: tag,
+	execId := fmt.Sprintf("exec-%s", pod.RandStr(10, "alpha"))
+	exec := &hypervisor.ExecInfo{
+		ExecId:    execId,
+		ClientTag: execId,
+		Command:   cmd,
+		ExitCode:  255,
+		Terminal:  terminal,
 		Stdin:     stdin,
 		Stdout:    stdout,
-		Callback:  make(chan *types.VmResponse, 1),
 	}
 
 	// We need find the vm id which running POD, and stop it
@@ -66,16 +70,16 @@ func (daemon *Daemon) Exec(stdin io.ReadCloser, stdout io.WriteCloser, key, id, 
 			return err
 		}
 
-		container = id
+		exec.Container = id
 
 		pod.Lock()
-		pod.ttyList[tag] = tty
+		pod.execList[tag] = exec
 		pod.Unlock()
 
 		defer func() {
 			if err != nil && pod != nil {
 				pod.Lock()
-				delete(pod.ttyList, tag)
+				delete(pod.execList, tag)
 				pod.Unlock()
 			}
 		}()
@@ -92,7 +96,7 @@ func (daemon *Daemon) Exec(stdin io.ReadCloser, stdout io.WriteCloser, key, id, 
 		return err
 	}
 
-	if err := vm.Exec(container, cmd, terminal, tty); err != nil {
+	if err := vm.Exec(exec); err != nil {
 		return err
 	}
 
