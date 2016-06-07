@@ -29,16 +29,21 @@ func (daemon *Daemon) ExitCode(container, tag string) (int, error) {
 	}
 
 	pod.RLock()
-	exec, ok := pod.execList[tag]
 	defer pod.RUnlock()
 
-	if !ok {
-		return -1, fmt.Errorf("Tag %s incorrect", tag)
+	if exec, ok := pod.execList[tag]; ok {
+		delete(pod.execList, tag)
+		return int(exec.ExitCode), nil
 	}
 
-	delete(pod.execList, tag)
+	for _, c := range pod.ctnInfo {
+		if c.Id == container {
+			delete(c.ClientTag, tag)
+			return int(c.ExitCode), nil
+		}
+	}
 
-	return int(exec.ExitCode), nil
+	return -1, fmt.Errorf("Tag %s incorrect", tag)
 }
 
 func (daemon *Daemon) Exec(stdin io.ReadCloser, stdout io.WriteCloser, key, id, cmd, tag string, terminal bool) error {

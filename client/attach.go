@@ -62,6 +62,7 @@ func (cli *HyperClient) HyperCmdAttach(args ...string) error {
 			return err
 		}
 		defer term.RestoreTerminal(cli.inFd, oldState)
+		//TODO: pass containerId
 		cli.monitorTtySize(podId, tag)
 	}
 

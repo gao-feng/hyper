@@ -84,7 +84,7 @@ func (daemon *Daemon) StartPod(stdin io.ReadCloser, stdout io.WriteCloser, podId
 	}
 	var lazy bool = hypervisor.HDriver.SupportLazyMode() && vmId == ""
 
-	code, cause, err := daemon.StartInternal(p, vmId, nil, lazy, ttys)
+	code, cause, err := daemon.StartInternal(p, vmId, nil, lazy, ttys, tag)
 	if err != nil {
 		glog.Error(err.Error())
 		return -1, "", err
@@ -96,27 +96,22 @@ func (daemon *Daemon) StartPod(stdin io.ReadCloser, stdout io.WriteCloser, podId
 	}
 
 	if len(ttys) > 0 {
-		p.RLock()
-		tty, ok := p.ttyList[tag]
-		p.RUnlock()
+		// only attach to first container
+		ttys[0].WaitForFinish()
+		ttyContainers := p.ctnInfo
+		if p.spec.Type == "service-discovery" {
+			ttyContainers = p.ctnInfo[1:]
+		}
 
-		if ok {
-			tty.WaitForFinish()
-			ttyContainers := p.ctnInfo
-			if p.spec.Type == "service-discovery" {
-				ttyContainers = p.ctnInfo[1:]
-			}
-
-			if len(ttyContainers) > 0 {
-				ttyContainers[0].ExitCode = tty.ExitCode
-			}
+		if len(ttyContainers) > 0 {
+			ttyContainers[0].ExitCode = ttys[0].ExitCode
 		}
 	}
 
 	return code, cause, nil
 }
 
-func (daemon *Daemon) StartInternal(p *Pod, vmId string, config interface{}, lazy bool, streams []*hypervisor.TtyIO) (int, string, error) {
+func (daemon *Daemon) StartInternal(p *Pod, vmId string, config interface{}, lazy bool, streams []*hypervisor.TtyIO, tag string) (int, string, error) {
 	if !p.TransitionLock("start") {
 		return -1, "", fmt.Errorf("The pod(%s) is operting by others, please retry later", p.Id)
 	}
@@ -126,7 +121,7 @@ func (daemon *Daemon) StartInternal(p *Pod, vmId string, config interface{}, laz
 		return -1, "", fmt.Errorf("pod %s is already running", p.Id)
 	}
 
-	vmResponse, err := p.Start(daemon, vmId, lazy, streams)
+	vmResponse, err := p.Start(daemon, vmId, lazy, streams, tag)
 	if err != nil {
 		return -1, "", err
 	}
@@ -163,7 +158,7 @@ func (daemon *Daemon) RestartPod(mypod *hypervisor.PodStatus) error {
 		glog.Errorf(err.Error())
 		return err
 	}
-	_, _, err = daemon.StartInternal(pnew, "", nil, lazy, []*hypervisor.TtyIO{})
+	_, _, err = daemon.StartInternal(pnew, "", nil, lazy, []*hypervisor.TtyIO{}, "")
 	if err != nil {
 		glog.Error(err.Error())
 		return err
