@@ -586,6 +586,7 @@ func (p *Pod) parseContainerJsons(daemon *Daemon, jsons []*dockertypes.Container
 		ci.MountId = mountId
 		ci.Workdir = info.Config.WorkingDir
 		ci.Cmd = append([]string{info.Path}, info.Args...)
+		ci.ExitCode = 255
 
 		// We should ignore these two in runv, instead of clear them, but here is a work around
 		p.spec.Containers[i].Entrypoint = []string{}

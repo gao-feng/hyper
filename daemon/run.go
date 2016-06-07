@@ -66,6 +66,7 @@ func (daemon *Daemon) StartPod(stdin io.ReadCloser, stdout io.WriteCloser, podId
 	var ttys []*hypervisor.TtyIO = []*hypervisor.TtyIO{}
 
 	if tag != "" {
+		// tag is only used to identify if attach to the container
 		glog.V(1).Info("Pod Run with client terminal tag: ", tag)
 		ttys = append(ttys, &hypervisor.TtyIO{
 			Stdin:     stdin,
@@ -101,6 +102,14 @@ func (daemon *Daemon) StartPod(stdin io.ReadCloser, stdout io.WriteCloser, podId
 
 		if ok {
 			tty.WaitForFinish()
+			ttyContainers := p.ctnInfo
+			if p.spec.Type == "service-discovery" {
+				ttyContainers = p.ctnInfo[1:]
+			}
+
+			if len(ttyContainers) > 0 {
+				ttyContainers[0].ExitCode = tty.ExitCode
+			}
 		}
 	}
 

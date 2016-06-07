@@ -9,12 +9,23 @@ import (
 	"github.com/hyperhq/runv/hypervisor/types"
 )
 
+// tag == nil means get container's exit code
 func (daemon *Daemon) ExitCode(container, tag string) (int, error) {
 	glog.V(1).Infof("Get container id is %s", container)
 
 	pod, _, err := daemon.GetPodByContainerIdOrName(container)
 	if err != nil {
 		return -1, err
+	}
+
+	if tag == "" {
+		for _, c := range pod.ctnInfo {
+			if c.Id == container {
+				return int(c.ExitCode), nil
+			}
+		}
+
+		return -1, fmt.Errorf("cannot find container %s", container)
 	}
 
 	pod.RLock()
