@@ -695,7 +695,8 @@ func (p *Pod) UpdateContainerStatus(jsons []*dockertypes.ContainerJSON) error {
 		}
 
 		cmds := append([]string{jsons[idx].Path}, jsons[idx].Args...)
-		p.PodStatus.AddContainer(jsons[idx].ID, "/"+c.Name, jsons[idx].Image, cmds, types.S_POD_CREATED)
+		envs := jsons[idx].Config.Env
+		p.PodStatus.AddContainer(jsons[idx].ID, "/"+c.Name, jsons[idx].Image, cmds, envs, types.S_POD_CREATED)
 	}
 	return nil
 }

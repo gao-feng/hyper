@@ -133,7 +133,7 @@ func (daemon *Daemon) CreateContainerInPod(podId string, spec *apitypes.UserCont
 	jsons = append(jsons, rsp)
 
 	glog.V(3).Infof("ContainerJSON for container %s: %v", ccs.ID, *rsp)
-	p.Status().AddContainer(rsp.ID, "/"+rsp.Name, rsp.Image, rsp.Config.Cmd.Slice(), hypervisortypes.S_POD_CREATED)
+	p.Status().AddContainer(rsp.ID, "/"+rsp.Name, rsp.Image, rsp.Config.Cmd.Slice(), rsp.Config.Env, hypervisortypes.S_POD_CREATED)
 	p.Spec.Containers = append(p.Spec.Containers, convertToRunvContainerSpec(spec, p.Spec.Tty))
 
 	podSpec, err := json.Marshal(p.Spec)

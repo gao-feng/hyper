@@ -85,7 +85,7 @@ func SetupLoopbackAddress(vm *hypervisor.Vm, container, ip, operation string) er
 	vm.Pod.AddExec(container, execId, command, false)
 	defer vm.Pod.DeleteExec(execId)
 
-	if err := vm.Exec(container, execId, string(execcmd), false, tty); err != nil {
+	if err := vm.Exec(container, execId, string(execcmd), []string{}, false, tty); err != nil {
 		return err
 	}
 
@@ -133,7 +133,7 @@ func ApplyServices(vm *hypervisor.Vm, container string, services []pod.UserServi
 	vm.Pod.AddExec(container, execId, string(execcmd), false)
 	defer vm.Pod.DeleteExec(execId)
 
-	if err := vm.Exec(container, execId, string(execcmd), false, tty); err != nil {
+	if err := vm.Exec(container, execId, string(execcmd), []string{}, false, tty); err != nil {
 		return err
 	}
 

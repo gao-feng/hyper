@@ -73,6 +73,11 @@ func (daemon *Daemon) StartExec(stdin io.ReadCloser, stdout io.WriteCloser, cont
 		return fmt.Errorf("container %s is not running", containerId)
 	}
 
+	cs := status.GetContainer(containerId)
+	if cs == nil {
+		return fmt.Errorf("cannot find container %s", containerId)
+	}
+
 	es := status.GetExec(execId)
 	if es == nil {
 		return fmt.Errorf("Can not find exec %s", execId)
@@ -89,7 +94,7 @@ func (daemon *Daemon) StartExec(stdin io.ReadCloser, stdout io.WriteCloser, cont
 		return err
 	}
 
-	if err := vm.Exec(es.Container, es.Id, es.Cmds, es.Terminal, tty); err != nil {
+	if err := vm.Exec(es.Container, es.Id, es.Cmds, cs.Envs, es.Terminal, tty); err != nil {
 		return err
 	}
 
