@@ -424,24 +424,31 @@ func (p *Pod) init(data interface{}) error {
 	return nil
 }
 
-func (p *Pod) preprocess() error {
+func (p *Pod) preprocess() (err error) {
 	if p.Spec == nil {
 		return fmt.Errorf("No spec available for preprocess: %s", p.Id)
 	}
 
-	if err := ParseServiceDiscovery(p.Id, p.Spec); err != nil {
+	if err = ParseServiceDiscovery(p.Id, p.Spec); err != nil {
 		return err
 	}
 
-	if err := p.setupServices(); err != nil {
+	if err = p.setupServices(); err != nil {
 		return err
 	}
 
-	if err := p.setupEtcHosts(); err != nil {
+	if err = p.setupEtcHosts(); err != nil {
 		return err
 	}
 
-	if err := p.setupDNS(); err != nil {
+	defer func() {
+		if err != nil {
+			glog.Infof("preprocess pod %s failed", p.Id)
+			p.cleanupEtcHosts()
+		}
+	}()
+
+	if err = p.setupDNS(); err != nil {
 		glog.Warning("Fail to prepare DNS for %s: %v", p.Id, err)
 		return err
 	}
@@ -842,7 +849,9 @@ func (p *Pod) setupEtcHosts() (err error) {
 }
 
 func (p *Pod) cleanupEtcHosts() {
+	glog.Infof("cleanupEtcHost for %s", p.Id)
 	if p.Spec == nil {
+		glog.Infof("p.Spec is nil")
 		return
 	}
 
@@ -1044,17 +1053,17 @@ func (p *Pod) cleanupVolumes(sd Storage, sharedDir string) {
 func (p *Pod) Cleanup(daemon *Daemon) {
 	p.PodStatus.Vm = ""
 
-	if p.VM == nil {
-		return
+	glog.Infof("Cleanup pod %s", p.Id)
+	if p.VM != nil {
+		glog.Infof("p.VM is %s", p.VM.Id)
+		sharedDir := path.Join(hypervisor.BaseDir, p.VM.Id, hypervisor.ShareDirTag)
+		p.cleanupVolumes(daemon.Storage, sharedDir)
+		p.cleanupMountsAndFiles(daemon.Storage, sharedDir)
+		p.VM = nil
 	}
-
-	sharedDir := path.Join(hypervisor.BaseDir, p.VM.Id, hypervisor.ShareDirTag)
-	p.VM = nil
 
 	daemon.db.DeleteVMByPod(p.Id)
 
-	p.cleanupVolumes(daemon.Storage, sharedDir)
-	p.cleanupMountsAndFiles(daemon.Storage, sharedDir)
 	p.cleanupEtcHosts()
 
 	p.PodStatus.CleanupExec()
