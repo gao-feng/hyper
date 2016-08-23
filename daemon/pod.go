@@ -46,6 +46,7 @@ type Pod struct {
 	PodStatus *hypervisor.PodStatus
 	Spec      *pod.UserPod
 	VM        *hypervisor.Vm
+	Info      *apitypes.PodInfo
 
 	containers []*Container
 	volumes    map[string]*hypervisor.VolumeInfo

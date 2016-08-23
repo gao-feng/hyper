@@ -29,60 +29,103 @@ func (daemon *Daemon) GetPodInfo(podName string) (types.PodInfo, error) {
 		}
 	}
 
+	if pod.Info == nil {
+		containers := []*types.Container{}
+		for i, c := range pod.PodStatus.Containers {
+			ports := []*types.ContainerPort{}
+			envs := []*types.EnvironmentVar{}
+			vols := []*types.VolumeMount{}
+			cmd := []string{}
+			args := []string{}
+
+			if len(pod.containers) > i {
+				ci := pod.containers[i]
+				envs = ci.ApiContainer.Env
+				imageid = c.Image
+				cmd = ci.ApiContainer.Commands
+				args = ci.ApiContainer.Args
+			}
+			if len(cmd) == 0 {
+				cmd = pod.Spec.Containers[i].Command
+			}
+			for _, port := range pod.Spec.Containers[i].Ports {
+				ports = append(ports, &types.ContainerPort{
+					HostPort:      int32(port.HostPort),
+					ContainerPort: int32(port.ContainerPort),
+					Protocol:      port.Protocol})
+			}
+			for _, e := range pod.Spec.Containers[i].Envs {
+				envs = append(envs, &types.EnvironmentVar{
+					Env:   e.Env,
+					Value: e.Value})
+			}
+			for _, v := range pod.Spec.Containers[i].Volumes {
+				vols = append(vols, &types.VolumeMount{
+					Name:      v.Volume,
+					MountPath: v.Path,
+					ReadOnly:  v.ReadOnly})
+			}
+
+			container := types.Container{
+				Name:            c.Name,
+				ContainerID:     c.Id,
+				Image:           pod.Spec.Containers[i].Image,
+				ImageID:         imageid,
+				Commands:        cmd,
+				Args:            args,
+				WorkingDir:      pod.Spec.Containers[i].Workdir,
+				Labels:          pod.Spec.Containers[i].Labels,
+				Ports:           ports,
+				Env:             envs,
+				VolumeMounts:    vols,
+				Tty:             pod.Spec.Containers[i].Tty,
+				ImagePullPolicy: "",
+			}
+			containers = append(containers, &container)
+		}
+
+		podVoumes := []*types.PodVolume{}
+		for _, v := range pod.Spec.Volumes {
+			podVoumes = append(podVoumes, &types.PodVolume{
+				Name:   v.Name,
+				Source: v.Source,
+				Driver: v.Driver})
+		}
+
+		spec := types.PodSpec{
+			Volumes:    podVoumes,
+			Containers: containers,
+			Labels:     pod.Spec.Labels,
+			Vcpu:       int32(pod.Spec.Resource.Vcpu),
+			Memory:     int32(pod.Spec.Resource.Memory),
+		}
+
+		podIPs := []string{}
+		if pod.PodStatus.Status == runvtypes.S_POD_RUNNING && pod.VM != nil {
+			podIPs = pod.PodStatus.GetPodIP(pod.VM)
+		}
+
+		status := types.PodStatus{
+			HostIP:     utils.GetHostIP(),
+			PodIP:      podIPs,
+			StartTime:  pod.PodStatus.StartedAt,
+			FinishTime: pod.PodStatus.FinishedAt,
+		}
+
+		pod.Info = &types.PodInfo{
+			PodID:      pod.Id,
+			PodName:    pod.Spec.Name,
+			Kind:       "Pod",
+			CreatedAt:  pod.CreatedAt,
+			ApiVersion: utils.APIVERSION,
+			Vm:         pod.PodStatus.Vm,
+			Spec:       &spec,
+			Status:     &status,
+		}
+	}
+
 	cStatus := []*types.ContainerStatus{}
-	containers := []*types.Container{}
-	for i, c := range pod.PodStatus.Containers {
-		ports := []*types.ContainerPort{}
-		envs := []*types.EnvironmentVar{}
-		vols := []*types.VolumeMount{}
-		cmd := []string{}
-		args := []string{}
-
-		if len(pod.containers) > i {
-			ci := pod.containers[i]
-			envs = ci.ApiContainer.Env
-			imageid = c.Image
-			cmd = ci.ApiContainer.Commands
-			args = ci.ApiContainer.Args
-		}
-		if len(cmd) == 0 {
-			cmd = pod.Spec.Containers[i].Command
-		}
-		for _, port := range pod.Spec.Containers[i].Ports {
-			ports = append(ports, &types.ContainerPort{
-				HostPort:      int32(port.HostPort),
-				ContainerPort: int32(port.ContainerPort),
-				Protocol:      port.Protocol})
-		}
-		for _, e := range pod.Spec.Containers[i].Envs {
-			envs = append(envs, &types.EnvironmentVar{
-				Env:   e.Env,
-				Value: e.Value})
-		}
-		for _, v := range pod.Spec.Containers[i].Volumes {
-			vols = append(vols, &types.VolumeMount{
-				Name:      v.Volume,
-				MountPath: v.Path,
-				ReadOnly:  v.ReadOnly})
-		}
-
-		container := types.Container{
-			Name:            c.Name,
-			ContainerID:     c.Id,
-			Image:           pod.Spec.Containers[i].Image,
-			ImageID:         imageid,
-			Commands:        cmd,
-			Args:            args,
-			WorkingDir:      pod.Spec.Containers[i].Workdir,
-			Labels:          pod.Spec.Containers[i].Labels,
-			Ports:           ports,
-			Env:             envs,
-			VolumeMounts:    vols,
-			Tty:             pod.Spec.Containers[i].Tty,
-			ImagePullPolicy: "",
-		}
-		containers = append(containers, &container)
-
+	for _, c := range pod.PodStatus.Containers {
 		// Set ContainerStatus
 		s := types.ContainerStatus{}
 		s.Name = c.Name
@@ -90,6 +133,7 @@ func (daemon *Daemon) GetPodInfo(podName string) (types.PodInfo, error) {
 		s.Waiting = &types.WaitingStatus{Reason: ""}
 		s.Running = &types.RunningStatus{StartedAt: ""}
 		s.Terminated = &types.TermStatus{}
+
 		if c.Status == runvtypes.S_POD_CREATED {
 			s.Waiting.Reason = "Pending"
 			s.Phase = "pending"
@@ -112,34 +156,14 @@ func (daemon *Daemon) GetPodInfo(podName string) (types.PodInfo, error) {
 		cStatus = append(cStatus, &s)
 	}
 
-	podVoumes := []*types.PodVolume{}
-	for _, v := range pod.Spec.Volumes {
-		podVoumes = append(podVoumes, &types.PodVolume{
-			Name:   v.Name,
-			Source: v.Source,
-			Driver: v.Driver})
+	status := pod.Info.Status
+	status.ContainerStatus = cStatus
+	status.FinishTime = pod.PodStatus.FinishedAt
+
+	if len(status.PodIP) == 0 && pod.PodStatus.Status == runvtypes.S_POD_RUNNING && pod.VM != nil {
+		status.PodIP = pod.PodStatus.GetPodIP(pod.VM)
 	}
 
-	spec := types.PodSpec{
-		Volumes:    podVoumes,
-		Containers: containers,
-		Labels:     pod.Spec.Labels,
-		Vcpu:       int32(pod.Spec.Resource.Vcpu),
-		Memory:     int32(pod.Spec.Resource.Memory),
-	}
-
-	podIPs := []string{}
-	if pod.PodStatus.Status == runvtypes.S_POD_RUNNING && pod.VM != nil {
-		podIPs = pod.PodStatus.GetPodIP(pod.VM)
-	}
-
-	status := types.PodStatus{
-		ContainerStatus: cStatus,
-		HostIP:          utils.GetHostIP(),
-		PodIP:           podIPs,
-		StartTime:       pod.PodStatus.StartedAt,
-		FinishTime:      pod.PodStatus.FinishedAt,
-	}
 	switch pod.PodStatus.Status {
 	case runvtypes.S_POD_CREATED:
 		status.Phase = "Pending"
@@ -158,16 +182,7 @@ func (daemon *Daemon) GetPodInfo(podName string) (types.PodInfo, error) {
 		break
 	}
 
-	return types.PodInfo{
-		PodID:      pod.Id,
-		PodName:    pod.Spec.Name,
-		Kind:       "Pod",
-		CreatedAt:  pod.CreatedAt,
-		ApiVersion: utils.APIVERSION,
-		Vm:         pod.PodStatus.Vm,
-		Spec:       &spec,
-		Status:     &status,
-	}, nil
+	return *pod.Info, nil
 }
 
 func (daemon *Daemon) GetPodStats(podId string) (interface{}, error) {
